@@ -56,7 +56,7 @@ export function PoolThatFillsUp() {
     const RIPPLE = 1;
     const BOB = 1;
     const SMOOTH = 5;
-    const RIDE = 0.6;
+    const RIDE = 0.35;
     const motionPreference = window.matchMedia("(prefers-reduced-motion: reduce)");
     let reducedMotion = motionPreference.matches;
     const clamp = (value: number, min: number, max: number) => Math.min(max, Math.max(min, value));
@@ -102,7 +102,7 @@ export function PoolThatFillsUp() {
       const rect = stage.getBoundingClientRect();
       view.width = Math.max(1, rect.width);
       view.height = Math.max(1, rect.height);
-      view.dpr = Math.min(window.devicePixelRatio || 1, 2);
+      view.dpr = Math.min(window.devicePixelRatio || 1, view.width < 761 ? 1.5 : 2);
 
       canvas.width = Math.round(view.width * view.dpr);
       canvas.height = Math.round(view.height * view.dpr);
@@ -203,6 +203,31 @@ export function PoolThatFillsUp() {
       ctx.closePath();
       ctx.clip();
 
+      const floor = [
+        projectPoint(-width / 2, -depth, 0),
+        projectPoint(-width / 2, -depth, length),
+        projectPoint(width / 2, -depth, length),
+        projectPoint(width / 2, -depth, 0),
+      ];
+      const depthGradient = ctx.createLinearGradient(
+        view.originX,
+        view.originY + view.height * 0.3,
+        view.originX,
+        view.originY + view.height,
+      );
+      depthGradient.addColorStop(0, "rgba(18, 189, 235, 0.025)");
+      depthGradient.addColorStop(0.58, "rgba(18, 189, 235, 0.075)");
+      depthGradient.addColorStop(1, "rgba(3, 14, 29, 0.2)");
+      ctx.globalAlpha = 0.8;
+      ctx.fillStyle = depthGradient;
+      ctx.beginPath();
+      floor.forEach((point, index) => {
+        if (index === 0) ctx.moveTo(point.x, point.y);
+        else ctx.lineTo(point.x, point.y);
+      });
+      ctx.closePath();
+      ctx.fill();
+
       const fill = progressState.fill;
       const waterHeight = -depth + fill * (depth - 0.18);
       const amplitude =
@@ -291,20 +316,49 @@ export function PoolThatFillsUp() {
           edge.push(projectPoint(x, waterHeight + wave(x, 0, amplitude), 0));
         }
 
-        ctx.globalAlpha = 0.07 + 0.05 * fill;
-        ctx.fillStyle = view.colors.water;
         ctx.beginPath();
         edge.forEach((point, index) => {
           if (index === 0) ctx.moveTo(point.x, point.y);
           else ctx.lineTo(point.x, point.y);
         });
         ctx.closePath();
+        const waterGradient = ctx.createLinearGradient(
+          view.originX,
+          view.originY + view.height * 0.47,
+          view.originX,
+          view.originY + view.height,
+        );
+        waterGradient.addColorStop(0, "rgba(114, 240, 255, 0.2)");
+        waterGradient.addColorStop(0.54, "rgba(18, 189, 235, 0.1)");
+        waterGradient.addColorStop(1, "rgba(7, 26, 50, 0.18)");
+        ctx.globalAlpha = 0.72;
+        ctx.fillStyle = waterGradient;
         ctx.fill();
 
         ctx.strokeStyle = view.colors.water;
         ctx.globalAlpha = 0.9;
         ctx.lineWidth = 1.4;
         drawLine(edge);
+
+        ctx.strokeStyle = "#d9fbff";
+        ctx.lineWidth = 1;
+        for (let reflection = 0; reflection < 3; reflection++) {
+          const z =
+            length * (0.22 + reflection * 0.25) +
+            Math.sin(progressState.time * 0.32 + reflection) * 0.16;
+          ctx.globalAlpha =
+            0.07 + (0.05 * (1 + Math.sin(progressState.time * 0.48 + reflection))) / 2;
+          ctx.beginPath();
+
+          for (let index = 0; index <= 10; index++) {
+            const x = lerp(-width * 0.3, width * 0.3, index / 10);
+            const point = projectPoint(x, waterHeight + wave(x, z, amplitude) + 0.012, z);
+            if (index === 0) ctx.moveTo(point.x, point.y);
+            else ctx.lineTo(point.x, point.y);
+          }
+
+          ctx.stroke();
+        }
 
         for (let row = 1; row < view.lineCount; row++) {
           const z = (length * row) / view.lineCount;
@@ -396,24 +450,26 @@ export function PoolThatFillsUp() {
     };
 
     let active = true;
+    let stageVisible = false;
     let resizeCall: gsap.core.Tween | undefined;
     let scrollTrigger: ScrollTrigger | undefined;
     let context: gsap.Context | undefined;
+    let stageObserver: IntersectionObserver | undefined;
 
     const ticker = (_time: number, deltaTime: number) => {
       if (!active) return;
-
-      if (!ScrollTrigger.isInViewport(track)) {
-        progressState.value = progressState.target;
-        return;
-      }
-
       renderFrame(Math.min(deltaTime / 1000, 1 / 20));
+    };
+
+    const syncTicker = () => {
+      gsap.ticker.remove(ticker);
+      if (active && stageVisible && !reducedMotion) gsap.ticker.add(ticker);
     };
 
     const handleMotionPreferenceChange = (event: MediaQueryListEvent) => {
       reducedMotion = event.matches;
       if (reducedMotion) progressState.time = 0;
+      syncTicker();
       renderFrame(0);
     };
 
@@ -436,36 +492,77 @@ export function PoolThatFillsUp() {
         end: "bottom bottom",
         onUpdate: (instance) => {
           progressState.target = instance.progress;
+          if (reducedMotion) {
+            progressState.value = progressState.target;
+            renderFrame(0);
+          }
         },
         onRefresh: (instance) => {
           progressState.target = instance.progress;
+          if (reducedMotion) {
+            progressState.value = progressState.target;
+            renderFrame(0);
+          }
         },
       });
 
       ScrollTrigger.refresh();
       progressState.value = progressState.target;
 
-      gsap.ticker.add(ticker);
       renderFrame(0);
 
       if (!reducedMotion) {
-        gsap.from(".pool-heading > *", {
-          opacity: 0,
-          y: 18,
-          duration: 0.8,
-          ease: "power2.out",
-          stagger: 0.1,
-        });
+        const entrance = gsap.timeline({ defaults: { ease: "power2.out" } });
+        entrance
+          .fromTo(canvas, { opacity: 0 }, { opacity: 1, duration: 1.1 }, 0)
+          .fromTo(
+            ".pool-heading__eyebrow",
+            { opacity: 0, y: 10 },
+            { opacity: 1, y: 0, duration: 0.55 },
+            0.22,
+          )
+          .fromTo(
+            ".pool-heading h1",
+            { opacity: 0, y: 18 },
+            { opacity: 1, y: 0, duration: 0.7 },
+            0.36,
+          )
+          .fromTo(
+            ".pool-heading__description",
+            { opacity: 0, y: 12 },
+            { opacity: 1, y: 0, duration: 0.6 },
+            0.56,
+          )
+          .fromTo(
+            ".pool-heading__actions",
+            { opacity: 0, y: 10 },
+            { opacity: 1, y: 0, duration: 0.6 },
+            0.74,
+          );
         gsap.from([title, level.parentElement ?? level, cue], {
           opacity: 0,
-          y: 8,
           duration: 0.9,
           ease: "power3.out",
           stagger: 0.1,
         });
-        gsap.from(canvas, { opacity: 0, duration: 1.2, ease: "power1.out" });
       }
     }, section);
+
+    if ("IntersectionObserver" in window) {
+      stageObserver = new IntersectionObserver(([entry]) => {
+        stageVisible = entry.isIntersecting;
+        if (stageVisible) {
+          progressState.target = scrollTrigger?.progress ?? progressState.target;
+          progressState.value = progressState.target;
+          renderFrame(0);
+        }
+        syncTicker();
+      });
+      stageObserver.observe(stage);
+    } else {
+      stageVisible = true;
+      syncTicker();
+    }
 
     window.addEventListener("resize", handleResize, { passive: true });
     motionPreference.addEventListener("change", handleMotionPreferenceChange);
@@ -474,6 +571,7 @@ export function PoolThatFillsUp() {
       active = false;
       window.removeEventListener("resize", handleResize);
       motionPreference.removeEventListener("change", handleMotionPreferenceChange);
+      stageObserver?.disconnect();
       resizeCall?.kill();
       gsap.ticker.remove(ticker);
       scrollTrigger?.kill();

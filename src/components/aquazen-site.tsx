@@ -103,11 +103,28 @@ export function AquaZenSite() {
         gsap.utils.toArray<HTMLElement>(".reveal").forEach((item) => {
           gsap.fromTo(
             item,
-            { autoAlpha: 0, y: 28 },
+            { autoAlpha: 0, y: 20 },
             {
               autoAlpha: 1,
               y: 0,
-              duration: 0.75,
+              duration: 0.7,
+              ease: "power3.out",
+              scrollTrigger: {
+                trigger: item,
+                start: "top 88%",
+                toggleActions: "play reverse play reverse",
+              },
+            },
+          );
+        });
+
+        gsap.utils.toArray<HTMLElement>(".mask-reveal").forEach((item) => {
+          gsap.fromTo(
+            item,
+            { clipPath: "inset(0 0 12% 0)" },
+            {
+              clipPath: "inset(0 0 0 0)",
+              duration: 0.85,
               ease: "power2.out",
               scrollTrigger: {
                 trigger: item,
@@ -118,21 +135,21 @@ export function AquaZenSite() {
           );
         });
 
-        gsap.utils.toArray<HTMLElement>(".parallax__media").forEach((image) => {
-          gsap.to(image, {
-            yPercent: -6,
-            ease: "none",
-            scrollTrigger: {
-              trigger: image.parentElement,
-              start: "top bottom",
-              end: "bottom top",
-              scrub: 0.7,
-            },
-          });
-        });
-
         const responsiveAnimations = gsap.matchMedia();
         responsiveAnimations.add("(min-width: 761px)", () => {
+          gsap.utils.toArray<HTMLElement>(".parallax__media").forEach((image) => {
+            gsap.to(image, {
+              yPercent: -3,
+              ease: "none",
+              scrollTrigger: {
+                trigger: image.parentElement,
+                start: "top bottom",
+                end: "bottom top",
+                scrub: 0.9,
+              },
+            });
+          });
+
           gsap.to(".process__line-fill", {
             scaleX: 1,
             ease: "none",
@@ -405,7 +422,7 @@ export function AquaZenSite() {
 
           <section aria-labelledby="care-title" className="care section-pad" id="diferenciais">
             <div className="page-wrap care__layout">
-              <div className="care__image-wrap reveal parallax">
+              <div className="care__image-wrap reveal parallax mask-reveal">
                 <Image
                   alt="Piscina de resort integrada a jardins tropicais e ao horizonte"
                   className="care__image parallax__media"
@@ -489,7 +506,7 @@ export function AquaZenSite() {
               <div className="gallery-grid">
                 {galleryImages.map((item, index) => (
                   <figure className={`gallery-card gallery-card--${index + 1} reveal`} key={item.title}>
-                    <div className="gallery-card__image parallax">
+                    <div className={`gallery-card__image parallax${index === 0 ? " mask-reveal" : ""}`}>
                       <Image
                         alt={item.imageAlt}
                         className="parallax__media"
