@@ -52,10 +52,10 @@ export function PoolThatFillsUp() {
 
     const DEPTH = 2.4;
     const LANES = 4;
-    const LINES = 34;
+    const LINES = 28;
     const RIPPLE = 1;
     const BOB = 1;
-    const SMOOTH = 5;
+    const SMOOTH = 7;
     const RIDE = 0.35;
     const motionPreference = window.matchMedia("(prefers-reduced-motion: reduce)");
     let reducedMotion = motionPreference.matches;
@@ -85,6 +85,7 @@ export function PoolThatFillsUp() {
         water: "#12BDEB",
       },
     };
+    let titleWidth = 1;
 
     const projectPoint = (x: number, y: number, z: number): ProjectedPoint => {
       const dy = y - camera.y;
@@ -102,10 +103,11 @@ export function PoolThatFillsUp() {
       const rect = stage.getBoundingClientRect();
       view.width = Math.max(1, rect.width);
       view.height = Math.max(1, rect.height);
-      view.dpr = Math.min(window.devicePixelRatio || 1, view.width < 761 ? 1.5 : 2);
+      view.dpr = Math.min(window.devicePixelRatio || 1, view.width < 761 ? 1.25 : 1.5);
 
       canvas.width = Math.round(view.width * view.dpr);
       canvas.height = Math.round(view.height * view.dpr);
+      titleWidth = titleText.offsetWidth || 1;
 
       const style = getComputedStyle(section);
       view.colors.ink = style.getPropertyValue("--pool-ink").trim() || "#EAF2F7";
@@ -144,7 +146,9 @@ export function PoolThatFillsUp() {
       );
       view.originX = view.width / 2 - ((minX + maxX) / 2) * view.focalLength;
       view.originY = topSpace + availableHeight / 2 - ((minY + maxY) / 2) * view.focalLength;
-      view.lineCount = Math.round(LINES * clamp(view.width / 1100, 0.55, 1));
+      view.lineCount = Math.round(
+        LINES * clamp(view.width / 1100, view.width < 761 ? 0.5 : 0.72, 1),
+      );
       track.style.height = `${Math.round(320 * RIDE + 100)}lvh`;
     };
 
@@ -297,7 +301,7 @@ export function PoolThatFillsUp() {
 
       if (fill > 0.002) {
         const edge: ProjectedPoint[] = [];
-        const edgeSteps = 28;
+        const edgeSteps = 20;
 
         for (let index = 0; index <= edgeSteps; index++) {
           const z = (length * index) / edgeSteps;
@@ -360,18 +364,21 @@ export function PoolThatFillsUp() {
           ctx.stroke();
         }
 
+        const waterSteps = 20;
         for (let row = 1; row < view.lineCount; row++) {
           const z = (length * row) / view.lineCount;
-          const points: ProjectedPoint[] = [];
+          ctx.beginPath();
 
-          for (let index = 0; index <= 30; index++) {
-            const x = -width / 2 + (width * index) / 30;
-            points.push(projectPoint(x, waterHeight + wave(x, z, amplitude), z));
+          for (let index = 0; index <= waterSteps; index++) {
+            const x = -width / 2 + (width * index) / waterSteps;
+            const point = projectPoint(x, waterHeight + wave(x, z, amplitude), z);
+            if (index === 0) ctx.moveTo(point.x, point.y);
+            else ctx.lineTo(point.x, point.y);
           }
 
           ctx.globalAlpha = lerp(0.75, 0.22, row / view.lineCount);
           ctx.lineWidth = lerp(1.2, 0.7, row / view.lineCount);
-          drawLine(points);
+          ctx.stroke();
         }
       }
 
@@ -402,7 +409,6 @@ export function PoolThatFillsUp() {
       titleText.style.fontWeight = fontWeight.toFixed(0);
       titleText.style.fontStretch = `${fontStretch.toFixed(1)}%`;
 
-      const titleWidth = titleText.offsetWidth || 1;
       const poolWidth =
         projectPoint(width / 2, titleY, titleZ).x - projectPoint(-width / 2, titleY, titleZ).x;
       const scale = Math.min(
